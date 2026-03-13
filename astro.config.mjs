@@ -1,12 +1,23 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightPageActions from 'starlight-page-actions';
 
 // https://astro.build/config
 export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'VisiBooks',
+			plugins: [
+				starlightPageActions({
+					baseUrl: 'https://docs.visibooks.app/',
+					actions: {
+						chatgpt: false,
+						v0: false,
+						t3Chat: false,
+					},
+				}),
+			],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/VisiGrid/visibooks-docs' }],
 			sidebar: [
 				{
