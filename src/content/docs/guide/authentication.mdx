@@ -1,0 +1,68 @@
+---
+title: Authentication
+description: API key authentication for the VisiBooks API.
+---
+
+## API Keys
+
+All requests require a Bearer token in the `Authorization` header:
+
+```
+Authorization: Bearer vk_aBcDeFgHiJkLmNoPqRsTuVwXyZ...
+```
+
+Keys use the `vk_` prefix followed by a base64-encoded token.
+
+## Scopes
+
+Each API key has one or more scopes that control what it can access:
+
+| Scope | Access |
+|---|---|
+| `read` | GET requests — list and retrieve resources |
+| `write` | POST, PATCH, DELETE — create, update, void resources |
+| `reports` | Financial reports (AR aging, etc.) |
+| `admin` | Grants all scopes |
+
+A request to an endpoint requiring a scope your key doesn't have returns:
+
+```json
+{
+  "error": {
+    "code": "SCOPE_MISSING",
+    "message": "API key missing required scope: write"
+  }
+}
+```
+
+## Owner Binding
+
+API keys are bound to a specific entity (User or Team). The key can only access data belonging to that entity.
+
+For Team-bound keys, the key's user must have `editor` or `admin` role on the team to perform write operations.
+
+## Activity Tracking
+
+Every authenticated request updates the key's `last_used_at` timestamp and `last_ip`. You can see this in your API Keys settings.
+
+## Key Expiration
+
+Keys can optionally have an expiration date. Expired keys return:
+
+```json
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid or expired API key"
+  }
+}
+```
+
+## Rate Limits
+
+| Endpoint | Limit |
+|---|---|
+| General (`/api/v1/books/*`) | 120 requests/minute |
+| Reports (`/api/v1/books/reports/*`) | 30 requests/minute |
+
+Rate limits are per API key. Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header.

@@ -1,0 +1,257 @@
+---
+title: Invoices
+description: Create, manage, post, and void invoices.
+---
+
+Invoices follow a lifecycle: **draft** → **posted** → optionally **void**.
+
+Only draft invoices can be modified. Posted invoices are immutable.
+
+## List Invoices
+
+```
+GET /api/v1/books/invoices
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `status` | string | Filter: `draft`, `posted`, `void` |
+| `contact_id` | integer | Filter by contact |
+| `invoice_number` | string | Filter by invoice number |
+| `from` | date | Issue date from (inclusive) |
+| `to` | date | Issue date to (inclusive) |
+| `q` | string | Search invoice number or contact name |
+| `limit` | integer | Records per page (default 25, max 100) |
+| `after` | string | Pagination cursor |
+
+---
+
+## Get Invoice
+
+```
+GET /api/v1/books/invoices/:id
+```
+
+**Scope:** `read`
+
+Returns the invoice with line items and payment applications:
+
+```json
+{
+  "data": {
+    "id": 123,
+    "external_id": "INV-001",
+    "invoice_number": "INV-00001",
+    "status": "posted",
+    "contact_id": 42,
+    "contact_external_id": "cust-001",
+    "contact_name": "Acme Corp",
+    "issue_date": "2026-03-01",
+    "due_date": "2026-04-01",
+    "currency": "USD",
+    "subtotal_cents": 50000,
+    "discount_cents": 0,
+    "tax_cents": 0,
+    "tax_rate_bps": 0,
+    "total_cents": 50000,
+    "amount_paid_cents": 0,
+    "balance_due_cents": 50000,
+    "notes": null,
+    "posted_at": "2026-03-01T12:00:00Z",
+    "voided_at": null,
+    "created_at": "2026-03-01T12:00:00Z",
+    "updated_at": "2026-03-01T12:00:00Z",
+    "invoice_lines": [
+      {
+        "id": 456,
+        "external_id": "LINE-001",
+        "position": 0,
+        "description": "Consulting",
+        "quantity": 1.0,
+        "unit_price_cents": 50000,
+        "amount_cents": 50000,
+        "service_id": null,
+        "revenue_account_id": null
+      }
+    ],
+    "payment_applications": []
+  }
+}
+```
+
+### Invoice Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `external_id` | string | Your system's ID |
+| `invoice_number` | string | Auto-generated invoice number |
+| `status` | string | `draft`, `posted`, or `void` |
+| `contact_id` | integer | Associated contact ID |
+| `contact_external_id` | string | Contact's external ID |
+| `contact_name` | string | Contact name |
+| `issue_date` | date | Invoice issue date |
+| `due_date` | date | Payment due date |
+| `currency` | string | 3-letter currency code |
+| `subtotal_cents` | integer | Subtotal before discounts and tax |
+| `discount_cents` | integer | Discount amount |
+| `tax_cents` | integer | Tax amount |
+| `tax_rate_bps` | integer | Tax rate in basis points (875 = 8.75%) |
+| `total_cents` | integer | Total after discounts and tax |
+| `amount_paid_cents` | integer | Amount paid via applied payments |
+| `balance_due_cents` | integer | Remaining balance |
+| `notes` | string | Free-text notes |
+| `posted_at` | timestamp | When the invoice was posted (null if draft) |
+| `voided_at` | timestamp | When the invoice was voided (null if not voided) |
+
+---
+
+## Get Invoice by External ID
+
+```
+GET /api/v1/books/invoices/by_external_id/:external_id
+```
+
+**Scope:** `read`
+
+---
+
+## Create Invoice
+
+```
+POST /api/v1/books/invoices
+```
+
+**Scope:** `write` | **Idempotency:** supported
+
+### Request Body
+
+```json
+{
+  "invoice": {
+    "contact_id": 42,
+    "issue_date": "2026-03-12",
+    "due_date": "2026-04-12",
+    "currency": "USD",
+    "external_id": "INV-001",
+    "tax_rate_bps": 0,
+    "notes": "March consulting",
+    "invoice_lines_attributes": [
+      {
+        "description": "Consulting — March 2026",
+        "quantity": 1,
+        "unit_price_cents": 50000,
+        "position": 0,
+        "external_id": "LINE-001"
+      }
+    ]
+  }
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | integer | yes | Contact to bill |
+| `issue_date` | date | yes | Invoice date |
+| `due_date` | date | yes | Payment due date |
+| `currency` | string | no | Defaults to entity currency |
+| `external_id` | string | no | Your system's ID |
+| `discount_cents` | integer | no | Discount amount |
+| `tax_cents` | integer | no | Tax amount (overrides tax_rate_bps) |
+| `tax_rate_bps` | integer | no | Tax rate in basis points |
+| `notes` | string | no | Notes |
+| `invoice_lines_attributes` | array | no | Line items (see below) |
+
+### Line Item Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `description` | string | yes | Line description |
+| `quantity` | number | yes | Quantity (supports decimals) |
+| `unit_price_cents` | integer | yes | Unit price in cents |
+| `position` | integer | no | Display order |
+| `external_id` | string | no | Your system's ID |
+| `service_id` | integer | no | Link to a service |
+| `revenue_account_id` | integer | no | Override revenue account |
+
+**Returns:** `201 Created`
+
+**Webhook:** `books.invoice.created`
+
+Totals are automatically calculated from line items.
+
+---
+
+## Update Invoice
+
+```
+PATCH /api/v1/books/invoices/:id
+```
+
+**Scope:** `write`
+
+Only draft invoices can be updated. Returns `422` with code `INVOICE_NOT_DRAFT` if the invoice is posted or voided.
+
+---
+
+## Post Invoice
+
+```
+POST /api/v1/books/invoices/:id/post_invoice
+```
+
+**Scope:** `write`
+
+Transitions the invoice from `draft` to `posted`. Creates the corresponding journal entry in the general ledger.
+
+Returns `422` with:
+- `INVOICE_NOT_DRAFT` if already posted/voided
+- `PERIOD_CLOSED` if the issue date falls in a closed period
+
+---
+
+## Void Invoice
+
+```
+POST /api/v1/books/invoices/:id/void
+```
+
+**Scope:** `write`
+
+Voids a posted invoice. The invoice must have no payment applications.
+
+**Webhook:** `books.invoice.voided`
+
+---
+
+## Manage Line Items
+
+### Add Line
+
+```
+POST /api/v1/books/invoices/:invoice_id/lines
+```
+
+**Scope:** `write` | Only on draft invoices
+
+### Update Line
+
+```
+PATCH /api/v1/books/invoices/:invoice_id/lines/:id
+```
+
+**Scope:** `write` | Only on draft invoices
+
+### Delete Line
+
+```
+DELETE /api/v1/books/invoices/:invoice_id/lines/:id
+```
+
+**Scope:** `write` | Only on draft invoices | Returns `204 No Content`

@@ -1,0 +1,201 @@
+---
+title: Payments
+description: Record customer payments and apply them to invoices.
+---
+
+Payments record money received from customers. Apply payments to one or more invoices to track what's been paid.
+
+## List Payments
+
+```
+GET /api/v1/books/payments
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `contact_id` | integer | Filter by contact |
+| `status` | string | Filter: `pending`, `confirmed` |
+| `from` | date | Received date from (inclusive) |
+| `to` | date | Received date to (inclusive) |
+| `q` | string | Search payment reference or contact name |
+| `limit` | integer | Records per page (default 25, max 100) |
+| `after` | string | Pagination cursor |
+
+---
+
+## Get Payment
+
+```
+GET /api/v1/books/payments/:id
+```
+
+**Scope:** `read`
+
+Returns the payment with its applications:
+
+```json
+{
+  "data": {
+    "id": 789,
+    "external_id": "PAY-001",
+    "contact_id": 42,
+    "contact_external_id": "cust-001",
+    "contact_name": "Acme Corp",
+    "payment_reference": "CHK-4521",
+    "method": "check",
+    "received_at": "2026-03-15T00:00:00Z",
+    "currency": "USD",
+    "amount_cents": 50000,
+    "gross_amount_cents": null,
+    "fee_cents": null,
+    "fee_description": null,
+    "unapplied_cents": 0,
+    "status": "confirmed",
+    "notes": null,
+    "created_at": "2026-03-15T12:00:00Z",
+    "updated_at": "2026-03-15T12:00:00Z",
+    "applications": [
+      {
+        "id": 1,
+        "invoice_id": 123,
+        "invoice_external_id": "INV-001",
+        "invoice_number": "INV-00001",
+        "amount_cents": 50000
+      }
+    ]
+  }
+}
+```
+
+### Payment Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `external_id` | string | Your system's ID |
+| `contact_id` | integer | Paying contact |
+| `payment_reference` | string | Check number, transaction ID, etc. |
+| `method` | string | Payment method (e.g., `check`, `ach`, `wire`, `credit_card`) |
+| `received_at` | timestamp | When payment was received |
+| `currency` | string | 3-letter currency code |
+| `amount_cents` | integer | Net payment amount |
+| `gross_amount_cents` | integer | Gross amount before fees (if split payment) |
+| `fee_cents` | integer | Processing fee (if split payment) |
+| `fee_description` | string | Fee description (if split payment) |
+| `unapplied_cents` | integer | Amount not yet applied to invoices |
+| `status` | string | `pending` or `confirmed` |
+
+---
+
+## Get Payment by External ID
+
+```
+GET /api/v1/books/payments/by_external_id/:external_id
+```
+
+**Scope:** `read`
+
+---
+
+## Create Payment
+
+```
+POST /api/v1/books/payments
+```
+
+**Scope:** `write` | **Idempotency:** supported
+
+### Request Body
+
+```json
+{
+  "payment": {
+    "contact_id": 42,
+    "payment_reference": "CHK-4521",
+    "method": "check",
+    "received_at": "2026-03-15",
+    "currency": "USD",
+    "amount_cents": 50000,
+    "external_id": "PAY-001",
+    "notes": "March payment"
+  }
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | integer | yes | Paying contact |
+| `amount_cents` | integer | yes | Payment amount |
+| `received_at` | date | yes | Date received |
+| `currency` | string | no | Defaults to entity currency |
+| `payment_reference` | string | no | Reference number |
+| `method` | string | no | Payment method |
+| `external_id` | string | no | Your system's ID |
+| `notes` | string | no | Notes |
+
+**Returns:** `201 Created`
+
+**Webhook:** `books.payment.created`
+
+### Split Payments (Fees)
+
+To record a payment with processing fees deducted:
+
+```json
+{
+  "payment": {
+    "contact_id": 42,
+    "gross_amount_cents": 50000,
+    "fee_cents": 1500,
+    "fee_account_id": 15,
+    "fee_description": "Stripe processing fee",
+    "received_at": "2026-03-15",
+    "external_id": "PAY-002"
+  }
+}
+```
+
+The net `amount_cents` is calculated as `gross_amount_cents - fee_cents`.
+
+---
+
+## Apply Payment to Invoices
+
+```
+POST /api/v1/books/payments/:id/apply
+```
+
+**Scope:** `write`
+
+### Request Body
+
+```json
+{
+  "applications": [
+    { "invoice_id": 123, "amount_cents": 30000 },
+    { "invoice_id": 124, "amount_cents": 20000 }
+  ]
+}
+```
+
+Returns `422` with code `PAYMENT_OVER_APPLIED` if the total applied exceeds the payment amount or any invoice's balance.
+
+---
+
+## Void Payment
+
+```
+POST /api/v1/books/payments/:id/void
+```
+
+**Scope:** `write`
+
+Voids the payment and removes all applications. Affected invoice balances are recalculated.
+
+**Webhook:** `books.payment.voided`

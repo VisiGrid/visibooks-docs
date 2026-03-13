@@ -1,0 +1,61 @@
+---
+title: Errors
+description: Error codes and handling for the VisiBooks API.
+---
+
+## Error Format
+
+All errors return a consistent JSON structure:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Contact name can't be blank",
+    "details": {}
+  }
+}
+```
+
+## Error Codes
+
+### Authentication & Authorization
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `UNAUTHORIZED` | 401 | Missing, invalid, or expired API key |
+| `FORBIDDEN` | 403 | Key not bound to a books owner |
+| `SCOPE_MISSING` | 403 | Key lacks required scope for this endpoint |
+| `BOOKS_NOT_SETUP` | 412 | Books module not initialized for this entity |
+
+### Resource Errors
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `NOT_FOUND` | 404 | Resource does not exist |
+| `VALIDATION_ERROR` | 400/422 | Invalid parameters or business rule violation |
+
+### Invoice-Specific
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `INVOICE_NOT_DRAFT` | 422 | Cannot modify a posted or voided invoice |
+| `PERIOD_CLOSED` | 422 | Cannot post to a closed accounting period |
+
+### Payment-Specific
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `PAYMENT_OVER_APPLIED` | 422 | Applied amount exceeds payment or invoice balance |
+
+### Idempotency
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `IDEMPOTENCY_KEY_REUSE_MISMATCH` | 409 | Same key used with different request body |
+
+### Rate Limiting
+
+| HTTP Status | Description |
+|---|---|
+| 429 | Too many requests. Check `Retry-After` header for seconds to wait. |

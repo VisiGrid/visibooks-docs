@@ -1,0 +1,174 @@
+---
+title: Contacts
+description: Create, list, update, and look up contacts.
+---
+
+Contacts represent customers, vendors, and other parties you transact with.
+
+## List Contacts
+
+```
+GET /api/v1/books/contacts
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `contact_type` | string | Filter by type: `customer`, `vendor`, or `both` |
+| `email` | string | Filter by exact email |
+| `q` | string | Search by name or email |
+| `limit` | integer | Records per page (default 25, max 100) |
+| `after` | string | Pagination cursor |
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "external_id": "cust-001",
+      "name": "Acme Corp",
+      "email": "billing@acme.com",
+      "phone": "555-0100",
+      "contact_type": "customer",
+      "billing_address": {
+        "line1": "123 Main St",
+        "city": "Springfield",
+        "state": "IL",
+        "zip": "62701"
+      },
+      "tax_id": null,
+      "is_1099_eligible": false,
+      "created_at": "2026-03-01T12:00:00Z",
+      "updated_at": "2026-03-01T12:00:00Z"
+    }
+  ],
+  "page": { "limit": 25, "has_more": false, "next_cursor": null }
+}
+```
+
+---
+
+## Get Contact
+
+```
+GET /api/v1/books/contacts/:id
+```
+
+**Scope:** `read`
+
+---
+
+## Get Contact by External ID
+
+```
+GET /api/v1/books/contacts/by_external_id/:external_id
+```
+
+**Scope:** `read`
+
+---
+
+## Create Contact
+
+```
+POST /api/v1/books/contacts
+```
+
+**Scope:** `write` | **Idempotency:** supported
+
+### Request Body
+
+```json
+{
+  "contact": {
+    "name": "Acme Corp",
+    "email": "billing@acme.com",
+    "phone": "555-0100",
+    "contact_type": "customer",
+    "external_id": "cust-001",
+    "tax_id": "12-3456789",
+    "is_1099_eligible": false,
+    "billing_address": {
+      "line1": "123 Main St",
+      "city": "Springfield",
+      "state": "IL",
+      "zip": "62701"
+    }
+  }
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Contact name |
+| `email` | string | no | Email address |
+| `phone` | string | no | Phone number |
+| `contact_type` | string | no | `customer`, `vendor`, or `both` |
+| `external_id` | string | no | Your system's ID for this contact |
+| `tax_id` | string | no | Tax identification number |
+| `is_1099_eligible` | boolean | no | Whether contact receives 1099s |
+| `billing_address` | object | no | Address fields (line1, line2, city, state, zip, country) |
+
+**Returns:** `201 Created`
+
+**Webhook:** `books.contact.created`
+
+---
+
+## Find or Create Contact
+
+```
+POST /api/v1/books/contacts/find_or_create
+```
+
+**Scope:** `write` | **Idempotency:** supported
+
+Upsert a contact by `external_id`. If a contact with the given `external_id` exists, returns it. Otherwise creates a new one.
+
+### Request Body
+
+```json
+{
+  "contact": {
+    "external_id": "cust-001",
+    "name": "Acme Corp",
+    "email": "billing@acme.com"
+  },
+  "update_existing": true
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `external_id` | string | **Required.** Your system's ID |
+| `update_existing` | boolean | If `true`, updates existing contact with provided fields |
+
+### Response
+
+Returns the contact with a `created` flag:
+
+```json
+{
+  "data": { ... },
+  "created": false
+}
+```
+
+---
+
+## Update Contact
+
+```
+PATCH /api/v1/books/contacts/:id
+```
+
+**Scope:** `write`
+
+Same parameters as Create. Only provided fields are updated.

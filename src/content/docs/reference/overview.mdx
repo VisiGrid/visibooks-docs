@@ -1,0 +1,62 @@
+---
+title: API Overview
+description: Overview of the VisiBooks API endpoints.
+---
+
+## Base URL
+
+```
+https://api.visihub.app/api/v1/books
+```
+
+## Resources
+
+| Resource | Endpoints | Description |
+|---|---|---|
+| [Accounts](/reference/accounts/) | List, Show | Chart of accounts (read-only) |
+| [Contacts](/reference/contacts/) | CRUD + Find-or-Create | Customers, vendors, and other parties |
+| [Invoices](/reference/invoices/) | CRUD + Post + Void + Lines | Accounts receivable invoices |
+| [Payments](/reference/payments/) | Create, List, Show, Apply, Void | Customer payments |
+| [Reports](/reference/reports/) | AR Aging | Financial reports |
+
+## Common Patterns
+
+### Response Envelope
+
+List endpoints return `data` (array) and `page` (pagination metadata):
+
+```json
+{
+  "data": [...],
+  "page": { "limit": 25, "has_more": false, "next_cursor": null }
+}
+```
+
+Single-resource endpoints return `data` (object):
+
+```json
+{
+  "data": { "id": 1, ... }
+}
+```
+
+### Money
+
+All monetary values use **integer cents** to avoid floating-point precision issues:
+
+| Field | Example | Meaning |
+|---|---|---|
+| `amount_cents: 50000` | — | $500.00 |
+| `tax_rate_bps: 875` | — | 8.75% |
+
+### Dates
+
+All dates use ISO 8601 format. Date-only fields use `YYYY-MM-DD`. Timestamps include timezone: `2026-03-12T15:30:00Z`.
+
+### External IDs
+
+Most resources support an `external_id` field for mapping to your own system. Use the `by_external_id` endpoint to look up resources by your ID:
+
+```
+GET /api/v1/books/contacts/by_external_id/your-id-here
+```

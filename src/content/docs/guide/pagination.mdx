@@ -1,0 +1,44 @@
+---
+title: Pagination
+description: Cursor-based pagination for list endpoints.
+---
+
+## Cursor-Based Pagination
+
+All list endpoints use cursor-based pagination with consistent ordering by ID.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `limit` | integer | 25 | Records per page (max 100) |
+| `after` | string | — | Cursor from previous response |
+
+### Response Format
+
+Every list response includes a `page` object:
+
+```json
+{
+  "data": [...],
+  "page": {
+    "limit": 25,
+    "has_more": true,
+    "next_cursor": "142"
+  }
+}
+```
+
+### Iterating Through Pages
+
+```bash
+# First page
+curl "https://api.visihub.app/api/v1/books/contacts?limit=10" \
+  -H "Authorization: Bearer vk_..."
+
+# Next page — use next_cursor as the after parameter
+curl "https://api.visihub.app/api/v1/books/contacts?limit=10&after=142" \
+  -H "Authorization: Bearer vk_..."
+```
+
+Continue fetching pages until `has_more` is `false`.

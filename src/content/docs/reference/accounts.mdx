@@ -1,0 +1,86 @@
+---
+title: Accounts
+description: List and retrieve chart of accounts.
+---
+
+Accounts are read-only via the API. Manage your chart of accounts in the VisiBooks UI.
+
+## List Accounts
+
+```
+GET /api/v1/books/accounts
+```
+
+**Scope:** `read`
+
+Returns all accounts ordered by account number.
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "number": "1000",
+      "name": "Cash",
+      "account_type": "asset",
+      "sub_type": "cash",
+      "normal_balance": "debit",
+      "active": true
+    },
+    {
+      "id": 2,
+      "number": "1100",
+      "name": "Accounts Receivable",
+      "account_type": "asset",
+      "sub_type": "accounts_receivable",
+      "normal_balance": "debit",
+      "active": true
+    }
+  ],
+  "page": {
+    "limit": 25,
+    "has_more": false,
+    "next_cursor": null
+  }
+}
+```
+
+### Account Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `number` | string | Account number (e.g., "1000") |
+| `name` | string | Account name |
+| `account_type` | string | `asset`, `liability`, `equity`, `revenue`, or `expense` |
+| `sub_type` | string | Sub-classification (e.g., `cash`, `bank`, `accounts_receivable`) |
+| `normal_balance` | string | `debit` or `credit` |
+| `active` | boolean | Whether the account is active |
+
+---
+
+## Get Account
+
+```
+GET /api/v1/books/accounts/:id
+```
+
+**Scope:** `read`
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 1,
+    "number": "1000",
+    "name": "Cash",
+    "account_type": "asset",
+    "sub_type": "cash",
+    "normal_balance": "debit",
+    "active": true
+  }
+}
+```

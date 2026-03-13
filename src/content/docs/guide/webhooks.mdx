@@ -1,0 +1,42 @@
+---
+title: Webhooks
+description: Receive real-time notifications when resources change.
+---
+
+## Overview
+
+VisiBooks fires webhook events when resources are created or changed via the API. Configure webhook endpoints in **Settings > Webhooks** to receive these notifications.
+
+## Events
+
+| Event | Trigger |
+|---|---|
+| `books.contact.created` | Contact created |
+| `books.invoice.created` | Invoice created |
+| `books.invoice.voided` | Invoice voided |
+| `books.payment.created` | Payment created |
+| `books.payment.voided` | Payment voided |
+
+## Payload
+
+Webhook payloads include the resource ID and external ID:
+
+```json
+{
+  "event": "books.invoice.created",
+  "data": {
+    "invoice_id": 123,
+    "external_id": "INV-001"
+  },
+  "timestamp": "2026-03-12T15:30:00Z"
+}
+```
+
+## Testing
+
+You can send a test ping to any webhook endpoint from the Settings page, or via the API:
+
+```bash
+curl -X POST https://api.visihub.app/api/webhook_endpoints/{id}/ping \
+  -H "Authorization: Bearer vk_..."
+```

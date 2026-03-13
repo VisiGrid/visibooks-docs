@@ -1,0 +1,65 @@
+---
+title: Getting Started
+description: Set up API access to your VisiBooks ledger.
+---
+
+## Base URL
+
+All API requests use:
+
+```
+https://api.visihub.app/api/v1/books
+```
+
+## Prerequisites
+
+1. A VisiBooks account on a paid plan
+2. An entity with Books set up (chart of accounts initialized)
+3. An API key bound to your entity
+
+## Create an API Key
+
+1. Go to **Settings > API Keys** in VisiBooks
+2. Click **Create API Key**
+3. Select the scopes you need:
+   - `read` — list and retrieve resources
+   - `write` — create, update, and void resources
+   - `reports` — access financial reports
+4. Bind the key to your entity
+5. Copy the key — it starts with `vk_` and is only shown once
+
+## Make Your First Request
+
+```bash
+curl https://api.visihub.app/api/v1/books/accounts \
+  -H "Authorization: Bearer vk_your_api_key_here"
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "number": "1000",
+      "name": "Cash",
+      "account_type": "asset",
+      "sub_type": "cash",
+      "normal_balance": "debit",
+      "active": true
+    }
+  ],
+  "page": {
+    "limit": 25,
+    "has_more": false,
+    "next_cursor": null
+  }
+}
+```
+
+## Next Steps
+
+- [Authentication](/guide/authentication/) — scopes, key management, owner binding
+- [Pagination](/guide/pagination/) — cursor-based pagination
+- [API Reference](/reference/overview/) — full endpoint documentation

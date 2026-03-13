@@ -1,0 +1,46 @@
+---
+title: Idempotency
+description: Safely retry requests with idempotency keys.
+---
+
+## Idempotency Keys
+
+All mutation endpoints (POST, PATCH, DELETE) support the `Idempotency-Key` header. This lets you safely retry requests without creating duplicate resources.
+
+### Usage
+
+```bash
+curl -X POST https://api.visihub.app/api/v1/books/invoices \
+  -H "Authorization: Bearer vk_..." \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: invoice-acme-001" \
+  -d '{ "invoice": { ... } }'
+```
+
+### Behavior
+
+| Scenario | Result |
+|---|---|
+| First request with key | Processes normally, caches response |
+| Retry with same key + same body | Returns cached response |
+| Retry with same key + different body | `409 Conflict` |
+
+### Error Response
+
+If you reuse a key with a different request body:
+
+```json
+{
+  "error": {
+    "code": "IDEMPOTENCY_KEY_REUSE_MISMATCH",
+    "message": "Idempotency key already used with a different request body"
+  }
+}
+```
+
+### Best Practices
+
+- Use a unique, deterministic key per logical operation (e.g., `invoice-{external_id}`)
+- Always include the header for create operations
+- Keys are scoped to your API key's owner — no collision with other users
+- Cached responses expire after 24 hours
