@@ -13,9 +13,27 @@ VisiBooks fires webhook events when resources are created or changed via the API
 |---|---|
 | `books.contact.created` | Contact created |
 | `books.invoice.created` | Invoice created |
+| `books.invoice.posted` | Invoice posted to ledger |
 | `books.invoice.voided` | Invoice voided |
+| `books.invoice.paid` | Invoice fully paid |
 | `books.payment.created` | Payment created |
+| `books.payment.applied` | Payment applied to invoice(s) |
 | `books.payment.voided` | Payment voided |
+| `books.reconciliation.completed` | Reconciliation completed |
+| `books.reconciliation.invalidated` | Reconciliation invalidated |
+| `books.period.closed` | Accounting period closed |
+| `books.period.reopened` | Accounting period reopened |
+
+## Headers
+
+Every webhook delivery includes these headers:
+
+| Header | Description |
+|---|---|
+| `Content-Type` | `application/json` |
+| `User-Agent` | `VisiHub-Webhooks/1.0` |
+| `X-VisiHub-Event` | Event type (e.g., `books.invoice.created`) |
+| `X-VisiHub-Signature` | HMAC-SHA256 signature of the request body |
 
 ## Payload
 
@@ -32,9 +50,56 @@ Webhook payloads include the resource ID and external ID:
 }
 ```
 
+## Signature Verification
+
+Every webhook endpoint gets a unique secret (generated automatically when you create the endpoint). Deliveries are signed with HMAC-SHA256 using this secret.
+
+The signature is sent in the `X-VisiHub-Signature` header as `sha256=<hex digest>`.
+
+### Verifying in your application
+
+```python
+# Python
+import hmac
+import hashlib
+
+def verify_signature(payload_body: bytes, signature_header: str, secret: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(), payload_body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature_header)
+```
+
+```ruby
+# Ruby
+def verify_signature(payload_body, signature_header, secret)
+  expected = "sha256=" + OpenSSL::HMAC.hexdigest("SHA256", secret, payload_body)
+  Rack::Utils.secure_compare(expected, signature_header)
+end
+```
+
+```javascript
+// Node.js
+import { createHmac, timingSafeEqual } from "crypto";
+
+function verifySignature(payloadBody, signatureHeader, secret) {
+  const expected =
+    "sha256=" + createHmac("sha256", secret).update(payloadBody).digest("hex");
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader));
+}
+```
+
+Always use constant-time comparison to prevent timing attacks.
+
+## Retries and Failures
+
+Deliveries are retried up to **3 times** with increasing backoff on failure. A delivery is considered successful if your endpoint returns a `2xx` status code.
+
+After **10 consecutive failures**, the endpoint is automatically **disabled**. Re-enable it from Settings once the issue is resolved.
+
 ## Testing
 
-You can send a test ping to any webhook endpoint from the Settings page, or via the API:
+Send a test ping to any webhook endpoint from the Settings page, or via the API:
 
 ```bash
 curl -X POST https://api.visihub.app/api/webhook_endpoints/{id}/ping \
