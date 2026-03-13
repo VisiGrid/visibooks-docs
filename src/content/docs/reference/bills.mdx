@@ -1,0 +1,278 @@
+---
+title: Bills
+description: Create, manage, post, and void vendor bills.
+---
+
+Bills represent amounts owed to vendors. They follow a lifecycle: **draft** → **posted** → optionally **void**.
+
+Only draft bills can be modified. Posted bills are immutable.
+
+## List Bills
+
+```
+GET /api/books/bills
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `status` | string | Filter: `draft`, `posted`, `void` |
+| `contact_id` | integer | Filter by vendor contact |
+| `from` | date | Issue date from (inclusive) |
+| `to` | date | Issue date to (inclusive) |
+| `needs_completion` | boolean | Only draft bills missing line accounts |
+| `limit` | integer | Records per page (default 25, max 100) |
+| `after` | string | Pagination cursor |
+
+### Response
+
+```json
+{
+  "bills": [
+    {
+      "id": 1,
+      "bill_number": "BILL-00001",
+      "status": "draft",
+      "contact_id": 42,
+      "contact_name": "Acme Materials",
+      "issue_date": "2026-03-01",
+      "due_date": "2026-04-01",
+      "currency": "USD",
+      "subtotal_cents": 109500,
+      "tax_cents": 0,
+      "total_cents": 109500,
+      "amount_paid_cents": 0,
+      "balance_due_cents": 109500,
+      "posted_at": null,
+      "voided_at": null,
+      "notes": null,
+      "line_count": 1,
+      "has_missing_accounts": false,
+      "attachment_count": 1,
+      "created_at": "2026-03-01T12:00:00Z",
+      "updated_at": "2026-03-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Get Bill
+
+```
+GET /api/books/bills/:id
+```
+
+**Scope:** `read`
+
+Returns the bill with line items, payment applications, and debit note applications:
+
+```json
+{
+  "bill": {
+    "id": 1,
+    "bill_number": "BILL-00001",
+    "status": "draft",
+    "contact_id": 42,
+    "contact_name": "Acme Materials",
+    "issue_date": "2026-03-01",
+    "due_date": "2026-04-01",
+    "currency": "USD",
+    "subtotal_cents": 109500,
+    "tax_cents": 0,
+    "total_cents": 109500,
+    "amount_paid_cents": 0,
+    "balance_due_cents": 109500,
+    "posted_at": null,
+    "voided_at": null,
+    "notes": null,
+    "line_count": 1,
+    "has_missing_accounts": false,
+    "attachment_count": 1,
+    "invoice_document_id": 5,
+    "bill_lines": [
+      {
+        "id": 10,
+        "position": 0,
+        "account_id": 301,
+        "description": "Excavator rental — March 2026",
+        "quantity": 1.0,
+        "unit_price_cents": 109500,
+        "amount_cents": 109500
+      }
+    ],
+    "bill_applications": [],
+    "debit_applications": [],
+    "created_at": "2026-03-01T12:00:00Z",
+    "updated_at": "2026-03-01T12:00:00Z"
+  }
+}
+```
+
+### Bill Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `bill_number` | string | Auto-generated bill number |
+| `status` | string | `draft`, `posted`, or `void` |
+| `contact_id` | integer | Vendor contact ID |
+| `contact_name` | string | Vendor name |
+| `issue_date` | date | Bill date |
+| `due_date` | date | Payment due date |
+| `currency` | string | 3-letter currency code |
+| `subtotal_cents` | integer | Subtotal before tax |
+| `tax_cents` | integer | Tax amount |
+| `total_cents` | integer | Total after tax |
+| `amount_paid_cents` | integer | Amount paid via vendor payments |
+| `balance_due_cents` | integer | Remaining balance |
+| `posted_at` | timestamp | When the bill was posted (null if draft) |
+| `voided_at` | timestamp | When the bill was voided (null if not voided) |
+| `invoice_document_id` | integer | Linked invoice document (if created from inbox) |
+| `notes` | string | Free-text notes |
+
+---
+
+## Create Bill
+
+```
+POST /api/books/bills
+```
+
+**Scope:** `write`
+
+### Request Body
+
+```json
+{
+  "bill": {
+    "contact_id": 42,
+    "issue_date": "2026-03-12",
+    "due_date": "2026-04-12",
+    "currency": "USD",
+    "tax_cents": 0,
+    "notes": "March equipment rental",
+    "bill_lines_attributes": [
+      {
+        "description": "Excavator rental — March 2026",
+        "quantity": 1,
+        "unit_price_cents": 109500,
+        "account_id": 301,
+        "position": 0
+      }
+    ]
+  }
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | integer | yes | Vendor contact ID |
+| `issue_date` | date | yes | Bill date |
+| `due_date` | date | yes | Payment due date |
+| `currency` | string | no | Defaults to entity currency |
+| `tax_cents` | integer | no | Tax amount |
+| `notes` | string | no | Notes |
+| `bill_lines_attributes` | array | no | Line items (see below) |
+
+### Line Item Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `description` | string | yes | Line description |
+| `quantity` | number | yes | Quantity (supports decimals) |
+| `unit_price_cents` | integer | yes | Unit price in cents |
+| `account_id` | integer | no | Expense account ID |
+| `position` | integer | no | Display order |
+
+**Returns:** `201 Created`
+
+Totals are automatically calculated from line items.
+
+---
+
+## Update Bill
+
+```
+PATCH /api/books/bills/:id
+```
+
+**Scope:** `write`
+
+Only draft bills can be updated. Returns `409 Conflict` if the bill is posted or voided.
+
+Same parameters as Create. Only provided fields are updated. To manage line items, include `bill_lines_attributes` with `id` for existing lines or `_destroy: true` to remove.
+
+---
+
+## Post Bill
+
+```
+POST /api/books/bills/:id/post_bill
+```
+
+**Scope:** `write`
+
+Transitions the bill from `draft` to `posted`. Creates the corresponding journal entry in the general ledger (debit expense account, credit accounts payable).
+
+Returns `422` if:
+- Bill is not in draft status
+- Issue date falls in a closed period
+- Line items are missing expense accounts
+
+---
+
+## Void Bill
+
+```
+POST /api/books/bills/:id/void
+```
+
+**Scope:** `write`
+
+Voids a posted bill and reverses its journal entry. The bill must have no payment or debit note applications — unapply those first.
+
+Returns `409 Conflict` if the bill is not posted or has applications.
+
+---
+
+## Delete Bill
+
+```
+DELETE /api/books/bills/:id
+```
+
+**Scope:** `write`
+
+Permanently deletes a draft bill. Returns `409 Conflict` if the bill is not in draft status.
+
+**Returns:** `200 OK` with `{ "success": true }`
+
+---
+
+## Bulk Assign Account
+
+```
+POST /api/books/bills/bulk_assign_account
+```
+
+**Scope:** `write`
+
+Assigns an expense account to all lines missing one across multiple draft bills. Useful for batch processing inbox-converted bills.
+
+### Request Body
+
+```json
+{
+  "bill_ids": [1, 2, 3],
+  "account_id": 301
+}
+```
+
+**Returns:** `{ "updated": 3 }`

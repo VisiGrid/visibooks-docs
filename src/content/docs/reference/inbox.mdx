@@ -1,0 +1,297 @@
+---
+title: Invoice Inbox
+description: Upload vendor invoices, extract data, and convert to bills.
+---
+
+The invoice inbox receives vendor invoices as PDF uploads, extracts key fields (vendor, amounts, dates, line items), and provides a review workflow before converting to bills.
+
+## Status Lifecycle
+
+| Status | Meaning |
+|---|---|
+| `received` | PDF uploaded, not yet processed |
+| `extracting` | Extraction in progress |
+| `needs_review` | Extracted but missing required fields (vendor name or total) |
+| `ready` | All required fields present, ready for conversion |
+| `converted` | Converted to a bill — read-only |
+| `error` | Extraction failed |
+
+---
+
+## List Invoice Documents
+
+```
+GET /api/books/invoice_documents
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `status` | string | Filter by status |
+
+### Response
+
+Includes 30-day inbox stats and failure reason counts:
+
+```json
+{
+  "invoice_documents": [
+    {
+      "id": 7,
+      "source_type": "upload",
+      "status": "ready",
+      "filename": "invoice-march.pdf",
+      "file_size_bytes": 245000,
+      "sha256": "a1b2c3d4...",
+      "extracted_vendor_name": "Acme Materials",
+      "extracted_invoice_number": "INV-2026-0042",
+      "extracted_invoice_date": "2026-03-01",
+      "extracted_due_date": "2026-04-01",
+      "extracted_total_cents": 109500,
+      "extracted_tax_cents": 0,
+      "extracted_subtotal_cents": 109500,
+      "extracted_currency": "USD",
+      "extraction_method": "pdf_text",
+      "duplicate_of_bill_id": null,
+      "bill_id": null,
+      "commitment_review_status": "unmatched",
+      "converted_at": null,
+      "created_at": "2026-03-10T12:00:00Z",
+      "updated_at": "2026-03-10T12:00:00Z"
+    }
+  ],
+  "stats": {
+    "total": 45,
+    "ready": 12,
+    "needs_review": 3,
+    "error": 1,
+    "converted": 29,
+    "failure_reasons": {
+      "missing_vendor_name": 2,
+      "missing_total": 1,
+      "duplicate_flagged": 3
+    }
+  }
+}
+```
+
+### Document Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `source_type` | string | `upload` or `email` |
+| `status` | string | See lifecycle above |
+| `filename` | string | Original filename |
+| `file_size_bytes` | integer | PDF file size |
+| `sha256` | string | SHA-256 hash of the file (used for deduplication) |
+| `extracted_vendor_name` | string | Vendor name from extraction |
+| `extracted_invoice_number` | string | Invoice number from extraction |
+| `extracted_invoice_date` | date | Invoice date from extraction |
+| `extracted_due_date` | date | Due date from extraction |
+| `extracted_total_cents` | integer | Total amount from extraction |
+| `extracted_tax_cents` | integer | Tax amount from extraction |
+| `extracted_subtotal_cents` | integer | Subtotal from extraction |
+| `extracted_currency` | string | Currency code |
+| `extraction_method` | string | Method used (`pdf_text`, `ocr`, etc.) |
+| `duplicate_of_bill_id` | integer | If flagged as duplicate, the existing bill ID |
+| `bill_id` | integer | Bill created from this document (after conversion) |
+| `commitment_review_status` | string | `unmatched`, `pending`, or `approved` |
+| `converted_at` | timestamp | When converted to a bill |
+
+---
+
+## Upload Invoice
+
+```
+POST /api/books/invoice_documents
+Content-Type: multipart/form-data
+```
+
+**Scope:** `write`
+
+Upload a vendor invoice PDF. The system extracts fields automatically.
+
+### Request
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | yes | PDF file (max 20 MB) |
+
+### Response
+
+```json
+{
+  "invoice_document": { ... },
+  "pdf_url": "https://...",
+  "existing": false
+}
+```
+
+If the same file (by SHA-256) was already uploaded, returns the existing document with `"existing": true` and status `200` instead of `201`.
+
+**Returns:** `201 Created` (new) or `200 OK` (duplicate)
+
+---
+
+## Get Invoice Document
+
+```
+GET /api/books/invoice_documents/:id
+```
+
+**Scope:** `read`
+
+Returns full detail including extraction results, line items, and vendor suggestion:
+
+```json
+{
+  "invoice_document": {
+    "id": 7,
+    "status": "ready",
+    "extracted_vendor_name": "Acme Materials",
+    "extracted_total_cents": 109500,
+    "pdf_page_count": 2,
+    "extraction_result": {
+      "vendor_name": { "value": "Acme Materials", "confidence": "high", "source": "header" },
+      "total": { "value": 109500, "confidence": "high", "source": "footer" }
+    },
+    "extraction_version": 3,
+    "extracted_line_items": [
+      { "description": "Excavator rental", "quantity": 1, "unit_price_cents": 109500, "amount_cents": 109500 }
+    ],
+    "extraction_success": true,
+    "extraction_duration_ms": 1250,
+    "missing_required_fields": []
+  },
+  "pdf_url": "https://...",
+  "suggestion": {
+    "contact_id": 42,
+    "contact_name": "Acme Materials",
+    "confidence": 0.95
+  }
+}
+```
+
+---
+
+## Update Invoice Document
+
+```
+PATCH /api/books/invoice_documents/:id
+```
+
+**Scope:** `write`
+
+Correct extracted fields before conversion. Cannot update converted documents.
+
+### Request Body
+
+```json
+{
+  "extracted_vendor_name": "Acme Materials Inc.",
+  "extracted_total_cents": 109500,
+  "extracted_invoice_date": "2026-03-01"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `extracted_vendor_name` | string | Vendor name |
+| `extracted_invoice_number` | string | Invoice number |
+| `extracted_invoice_date` | date | Invoice date |
+| `extracted_due_date` | date | Due date |
+| `extracted_total_cents` | integer | Total in cents |
+| `extracted_tax_cents` | integer | Tax in cents |
+| `extracted_subtotal_cents` | integer | Subtotal in cents |
+| `extracted_currency` | string | Currency code |
+
+Returns `409 Conflict` if the document is already converted.
+
+---
+
+## Convert to Bill (Direct)
+
+```
+POST /api/books/invoice_documents/:id/convert
+```
+
+**Scope:** `write`
+
+Converts an invoice document directly to a draft bill without commitment matching. Use this for invoices that don't correspond to any commitment.
+
+```json
+{
+  "contact_id": 42
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | integer | no | Vendor contact to use on the bill |
+
+Returns the created bill and updated document.
+
+---
+
+## Re-extract
+
+```
+POST /api/books/invoice_documents/:id/reextract
+```
+
+**Scope:** `write`
+
+Re-runs PDF extraction with the latest extraction logic. Useful after extraction improvements. Cannot re-extract converted documents.
+
+---
+
+## Bulk Convert
+
+```
+POST /api/books/invoice_documents/bulk_convert
+```
+
+**Scope:** `write`
+
+Convert multiple ready documents to bills in one call.
+
+### Dry Run
+
+Preview what would happen:
+
+```json
+{
+  "ids": [1, 2, 3],
+  "dry_run": true
+}
+```
+
+Returns `will_convert` and `will_fail` arrays with reasons.
+
+### Execute
+
+```json
+{
+  "ids": [1, 2, 3]
+}
+```
+
+Returns `converted` and `failed` arrays.
+
+---
+
+## Delete Invoice Document
+
+```
+DELETE /api/books/invoice_documents/:id
+```
+
+**Scope:** `write`
+
+Permanently deletes a document. Cannot delete converted documents.
+
+Returns `409 Conflict` if converted.

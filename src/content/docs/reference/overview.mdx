@@ -11,6 +11,8 @@ https://api.visihub.app/api/v1/books
 
 ## Resources
 
+### Receivables
+
 | Resource | Endpoints | Description |
 |---|---|---|
 | [Accounts](/reference/accounts/) | List, Show | Chart of accounts (read-only) |
@@ -18,6 +20,15 @@ https://api.visihub.app/api/v1/books
 | [Invoices](/reference/invoices/) | CRUD + Post + Void + Lines | Accounts receivable invoices |
 | [Payments](/reference/payments/) | Create, List, Show, Apply, Void | Customer payments |
 | [Reports](/reference/reports/) | AR Aging | Financial reports |
+
+### Payables
+
+| Resource | Endpoints | Description |
+|---|---|---|
+| [Bills](/reference/bills/) | CRUD + Post + Void | Vendor bills (accounts payable) |
+| [Vendor Payments](/reference/vendor-payments/) | Create, List, Show, Apply, Void | Payments to vendors |
+| [Invoice Inbox](/reference/inbox/) | Upload, Extract, Convert | PDF invoice processing |
+| [Commitments](/reference/commitments/) | CRUD + Upsert + Match + Allocate | PO/expected cost matching |
 
 ## Common Patterns
 

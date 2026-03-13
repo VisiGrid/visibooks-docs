@@ -1,0 +1,189 @@
+---
+title: Vendor Payments
+description: Record payments to vendors and apply them to bills.
+---
+
+Vendor payments track money paid to vendors. After creating a payment, apply it to one or more bills to reduce their balance.
+
+## List Vendor Payments
+
+```
+GET /api/books/vendor_payments
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `contact_id` | integer | Filter by vendor contact |
+
+### Response
+
+```json
+{
+  "vendor_payments": [
+    {
+      "id": 1,
+      "contact_id": 42,
+      "contact_name": "Acme Materials",
+      "payment_reference": "CHK-1234",
+      "method": "check",
+      "paid_at": "2026-03-15",
+      "currency": "USD",
+      "amount_cents": 109500,
+      "unapplied_cents": 0,
+      "status": "confirmed",
+      "notes": null,
+      "attachment_count": 0,
+      "created_at": "2026-03-15T12:00:00Z",
+      "updated_at": "2026-03-15T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Get Vendor Payment
+
+```
+GET /api/books/vendor_payments/:id
+```
+
+**Scope:** `read`
+
+Returns the payment with its bill applications:
+
+```json
+{
+  "vendor_payment": {
+    "id": 1,
+    "contact_id": 42,
+    "contact_name": "Acme Materials",
+    "payment_reference": "CHK-1234",
+    "method": "check",
+    "paid_at": "2026-03-15",
+    "currency": "USD",
+    "amount_cents": 109500,
+    "unapplied_cents": 0,
+    "status": "confirmed",
+    "notes": null,
+    "attachment_count": 0,
+    "applications": [
+      {
+        "id": 5,
+        "bill_id": 1,
+        "bill_number": "BILL-00001",
+        "amount_cents": 109500
+      }
+    ],
+    "created_at": "2026-03-15T12:00:00Z",
+    "updated_at": "2026-03-15T12:00:00Z"
+  }
+}
+```
+
+### Payment Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `contact_id` | integer | Vendor contact ID |
+| `contact_name` | string | Vendor name |
+| `payment_reference` | string | Check number, wire ref, etc. |
+| `method` | string | Payment method (e.g. `check`, `ach`, `wire`) |
+| `paid_at` | date | Date payment was made |
+| `currency` | string | 3-letter currency code |
+| `amount_cents` | integer | Total payment amount |
+| `unapplied_cents` | integer | Amount not yet applied to bills |
+| `status` | string | `pending`, `confirmed`, or `void` |
+| `notes` | string | Free-text notes |
+
+---
+
+## Create Vendor Payment
+
+```
+POST /api/books/vendor_payments
+```
+
+**Scope:** `write`
+
+### Request Body
+
+```json
+{
+  "vendor_payment": {
+    "contact_id": 42,
+    "payment_reference": "CHK-1234",
+    "method": "check",
+    "paid_at": "2026-03-15",
+    "currency": "USD",
+    "amount_cents": 109500,
+    "status": "confirmed",
+    "notes": "March rental payment"
+  }
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | integer | yes | Vendor contact ID |
+| `amount_cents` | integer | yes | Payment amount |
+| `paid_at` | date | yes | Payment date |
+| `payment_reference` | string | no | Check number, wire reference, etc. |
+| `method` | string | no | Payment method |
+| `currency` | string | no | Defaults to entity currency |
+| `status` | string | no | `pending` or `confirmed` (default `pending`) |
+| `notes` | string | no | Notes |
+
+**Returns:** `201 Created`
+
+---
+
+## Apply Payment to Bills
+
+```
+POST /api/books/vendor_payments/:id/apply
+```
+
+**Scope:** `write`
+
+Applies a payment to one or more bills. Each application reduces the bill's balance and the payment's unapplied amount.
+
+### Request Body
+
+```json
+{
+  "applications": [
+    { "bill_id": 1, "amount_cents": 109500 }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `applications[].bill_id` | integer | yes | Bill to apply payment to |
+| `applications[].amount_cents` | integer | yes | Amount to apply |
+
+Returns `422` if:
+- Application amount exceeds unapplied balance
+- Application amount exceeds bill balance due
+
+---
+
+## Void Payment
+
+```
+POST /api/books/vendor_payments/:id/void
+```
+
+**Scope:** `write`
+
+Voids a payment and reverses all bill applications. Bills' balances are restored.
+
+Returns `409 Conflict` if the payment is already voided.

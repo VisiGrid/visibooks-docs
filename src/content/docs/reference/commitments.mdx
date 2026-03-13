@@ -1,0 +1,543 @@
+---
+title: Commitments
+description: Push expected costs (POs, contracts, recurring orders) and match them against incoming invoices.
+---
+
+Commitments represent expected vendor costs — purchase orders, standing contracts, rental agreements, or any expected payable. They exist separately from bills: a commitment is a control record that tracks what you expect to owe, while a bill is the actual liability.
+
+The typical flow:
+
+1. **Push commitments** from your ERP or operations system
+2. **Invoices arrive** in the inbox (PDF upload or email)
+3. **Match** invoices to commitments (automatic candidates + manual approval)
+4. **Create bills** from approved allocations
+
+## Status Lifecycle
+
+| Status | Meaning |
+|---|---|
+| `open` | No invoices matched yet |
+| `partially_matched` | Some invoices allocated, remaining balance > 0 |
+| `fully_matched` | Allocated amount equals expected total |
+| `overmatched` | Allocated amount exceeds expected total |
+| `canceled` | Commitment voided — no further matching allowed |
+
+Statuses are **derived** from allocation totals, not set manually. The only exception is `canceled`, which is an explicit action.
+
+---
+
+## List Commitments
+
+```
+GET /api/books/commitments
+```
+
+**Scope:** `read`
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `status` | string | Filter: `open`, `partially_matched`, `fully_matched`, `overmatched`, `canceled` |
+| `contact_id` | integer | Filter by vendor contact |
+| `from` | date | Period start from (inclusive) |
+| `to` | date | Period end to (inclusive) |
+| `has_remaining` | boolean | Only commitments with unmatched balance |
+
+### Response
+
+```json
+{
+  "commitments": [
+    {
+      "id": 1,
+      "number": "PO-2026-001",
+      "contact_id": 42,
+      "contact_name": "Acme Materials",
+      "external_source": "quarry",
+      "external_id": "ORD-8834",
+      "service_address": "123 Job Site Rd, Springfield IL",
+      "period_start": "2026-03-01",
+      "period_end": "2026-03-31",
+      "currency": "USD",
+      "expected_total_cents": 109500,
+      "matched_total_cents": 0,
+      "remaining_cents": 109500,
+      "status": "open",
+      "line_count": 1,
+      "metadata": { "job_code": "J-4401" },
+      "notes": "Monthly aggregate rental",
+      "created_at": "2026-03-01T12:00:00Z",
+      "updated_at": "2026-03-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Get Commitment
+
+```
+GET /api/books/commitments/:id
+```
+
+**Scope:** `read`
+
+Returns the commitment with lines and allocations:
+
+```json
+{
+  "commitment": {
+    "id": 1,
+    "number": "PO-2026-001",
+    "contact_id": 42,
+    "contact_name": "Acme Materials",
+    "external_source": "quarry",
+    "external_id": "ORD-8834",
+    "service_address": "123 Job Site Rd, Springfield IL",
+    "period_start": "2026-03-01",
+    "period_end": "2026-03-31",
+    "currency": "USD",
+    "expected_total_cents": 109500,
+    "matched_total_cents": 109500,
+    "remaining_cents": 0,
+    "status": "fully_matched",
+    "line_count": 1,
+    "metadata": { "job_code": "J-4401" },
+    "notes": "Monthly aggregate rental",
+    "lines": [
+      {
+        "id": 10,
+        "position": 0,
+        "description": "Excavator rental — March",
+        "quantity": 1,
+        "unit_price_cents": 109500,
+        "amount_cents": 109500,
+        "account_id": 301,
+        "period_start": "2026-03-01",
+        "period_end": "2026-03-31",
+        "external_line_id": "LINE-001",
+        "metadata": {}
+      }
+    ],
+    "allocations": [
+      {
+        "id": 5,
+        "commitment_id": 1,
+        "bill_id": 12,
+        "bill_number": "BILL-00042",
+        "invoice_document_id": 7,
+        "allocated_cents": 109500,
+        "invoice_total_cents": 109500,
+        "unallocated_remainder_cents": 0,
+        "variance_cents": 0,
+        "allocation_type": "manual",
+        "status": "approved",
+        "reviewed_by": "user@example.com",
+        "reviewed_at": "2026-03-12T14:30:00Z",
+        "notes": null,
+        "created_at": "2026-03-12T14:30:00Z"
+      }
+    ],
+    "created_at": "2026-03-01T12:00:00Z",
+    "updated_at": "2026-03-12T14:30:00Z"
+  }
+}
+```
+
+### Commitment Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Unique identifier |
+| `number` | string | PO / commitment number (unique per entity) |
+| `contact_id` | integer | Vendor contact ID |
+| `contact_name` | string | Vendor name |
+| `external_source` | string | Source system identifier (e.g. `quarry`, `procore`) |
+| `external_id` | string | ID in the source system |
+| `service_address` | string | Job site or delivery address |
+| `period_start` | date | Expected service/delivery start |
+| `period_end` | date | Expected service/delivery end |
+| `currency` | string | 3-letter currency code |
+| `expected_total_cents` | integer | Total expected cost |
+| `matched_total_cents` | integer | Sum of approved allocations (derived, read-only) |
+| `remaining_cents` | integer | Expected minus matched (derived, read-only) |
+| `status` | string | Derived from allocation totals (see lifecycle above) |
+| `line_count` | integer | Number of line items |
+| `metadata` | object | Arbitrary key-value data from source system |
+| `notes` | string | Free-text notes |
+
+### Line Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Line ID |
+| `position` | integer | Display order |
+| `description` | string | Line description |
+| `quantity` | number | Quantity |
+| `unit_price_cents` | integer | Unit price |
+| `amount_cents` | integer | Line total (quantity x unit price) |
+| `account_id` | integer | Expense account ID |
+| `period_start` | date | Line-level period start |
+| `period_end` | date | Line-level period end |
+| `external_line_id` | string | ID in source system |
+| `metadata` | object | Arbitrary key-value data |
+
+### Allocation Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Allocation ID |
+| `commitment_id` | integer | Parent commitment |
+| `bill_id` | integer | Bill created from this allocation (null until bill creation) |
+| `bill_number` | string | Bill number |
+| `invoice_document_id` | integer | Source invoice document |
+| `allocated_cents` | integer | Amount allocated from this invoice |
+| `invoice_total_cents` | integer | Snapshot of invoice total at allocation time |
+| `unallocated_remainder_cents` | integer | Invoice amount not covered by any allocation |
+| `variance_cents` | integer | Difference: allocated minus commitment remaining |
+| `allocation_type` | string | `manual`, `suggested`, or `auto` |
+| `status` | string | `pending`, `approved`, or `rejected` |
+| `reviewed_by` | string | Email of reviewer |
+| `reviewed_at` | timestamp | When reviewed |
+
+---
+
+## Create Commitment
+
+```
+POST /api/books/commitments
+```
+
+**Scope:** `write`
+
+### Request Body
+
+```json
+{
+  "commitment": {
+    "contact_id": 42,
+    "number": "PO-2026-001",
+    "service_address": "123 Job Site Rd, Springfield IL",
+    "period_start": "2026-03-01",
+    "period_end": "2026-03-31",
+    "currency": "USD",
+    "expected_total_cents": 109500,
+    "notes": "Monthly aggregate rental",
+    "metadata": { "job_code": "J-4401" },
+    "commitment_lines_attributes": [
+      {
+        "position": 0,
+        "description": "Excavator rental — March",
+        "quantity": 1,
+        "unit_price_cents": 109500,
+        "account_id": 301,
+        "period_start": "2026-03-01",
+        "period_end": "2026-03-31",
+        "external_line_id": "LINE-001"
+      }
+    ]
+  }
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | integer | yes | Vendor contact ID |
+| `number` | string | yes | PO / commitment number (must be unique per entity) |
+| `expected_total_cents` | integer | yes | Total expected cost |
+| `currency` | string | no | Defaults to entity currency |
+| `service_address` | string | no | Job site or delivery address |
+| `period_start` | date | no | Service/delivery start |
+| `period_end` | date | no | Service/delivery end |
+| `notes` | string | no | Notes |
+| `metadata` | object | no | Arbitrary key-value data |
+| `commitment_lines_attributes` | array | no | Line items (see Line Fields above) |
+
+**Returns:** `201 Created`
+
+---
+
+## Upsert by External ID
+
+```
+PUT /api/books/commitments/by_external/:external_source/:external_id
+```
+
+**Scope:** `write`
+
+**This is the primary endpoint for ERP integrations.** Creates a commitment if it doesn't exist, or updates it if it does. Idempotent — safe to call on every sync.
+
+The `external_source` and `external_id` are part of the URL path, not the request body.
+
+### Request Body
+
+Same as [Create Commitment](#create-commitment).
+
+### Example: Push a quarry order
+
+```
+PUT /api/books/commitments/by_external/quarry/ORD-8834
+```
+
+```json
+{
+  "commitment": {
+    "contact_id": 42,
+    "number": "PO-2026-001",
+    "service_address": "123 Job Site Rd, Springfield IL",
+    "period_start": "2026-03-01",
+    "period_end": "2026-03-31",
+    "currency": "USD",
+    "expected_total_cents": 109500,
+    "notes": "Monthly aggregate rental",
+    "metadata": { "job_code": "J-4401" },
+    "commitment_lines_attributes": [
+      {
+        "position": 0,
+        "description": "Excavator rental — March",
+        "quantity": 1,
+        "unit_price_cents": 109500,
+        "account_id": 301
+      }
+    ]
+  }
+}
+```
+
+### Update Behavior
+
+When a commitment with the given `external_source` + `external_id` already exists:
+
+- **No approved allocations:** All fields can be updated, including financial fields (`expected_total_cents`, `currency`, `contact_id`).
+- **Has approved allocations:** Only non-financial fields can be updated: `service_address`, `period_start`, `period_end`, `notes`, and `metadata`. Attempts to change financial fields return `409 Conflict`.
+- **Canceled:** Returns `409 Conflict`. Canceled commitments cannot be reactivated.
+
+**Returns:** `201 Created` (new) or `200 OK` (updated)
+
+---
+
+## Update Commitment
+
+```
+PATCH /api/books/commitments/:id
+```
+
+**Scope:** `write`
+
+Same parameters as Create. Subject to the same financial field restrictions as upsert when allocations exist.
+
+Returns `409 Conflict` if:
+- Commitment is canceled
+- Attempting to modify `expected_total_cents`, `currency`, or `contact_id` after allocations are approved
+
+---
+
+## Cancel Commitment
+
+```
+POST /api/books/commitments/:id/cancel
+```
+
+**Scope:** `write`
+
+Cancels a commitment. Cannot be undone. The commitment must not have any approved allocations — deallocate first.
+
+Returns `409 Conflict` if approved allocations exist.
+
+---
+
+## Invoice Matching
+
+These endpoints live on the [Invoice Documents](#invoice-matching-flow) resource but are documented here for context since they form the commitment workflow.
+
+### Get Commitment Candidates
+
+```
+GET /api/books/invoice_documents/:id/commitment_candidates
+```
+
+**Scope:** `read`
+
+Returns commitments that may match a given invoice, ranked by match quality. Matching is deterministic — no AI or scoring engine.
+
+**Match signals:**
+
+| Reason | Meaning |
+|---|---|
+| `exact_amount` | Invoice total equals commitment remaining (or expected total for first match) |
+| `amount_within_tolerance` | Within $25 or 5% of remaining |
+| `address_overlap` | Service address tokens overlap |
+| `period_overlap` | Invoice date or extracted period falls within commitment period |
+| `vendor_match` | Vendor resolved to same contact (always present) |
+
+```json
+{
+  "invoice_document_id": 7,
+  "invoice_total_cents": 109500,
+  "candidates": [
+    {
+      "commitment_id": 1,
+      "number": "PO-2026-001",
+      "contact_name": "Acme Materials",
+      "service_address": "123 Job Site Rd, Springfield IL",
+      "period_start": "2026-03-01",
+      "period_end": "2026-03-31",
+      "expected_total_cents": 109500,
+      "remaining_cents": 109500,
+      "variance_cents": 0,
+      "variance_percent": 0.0,
+      "reasons": ["exact_amount", "vendor_match"]
+    }
+  ]
+}
+```
+
+### Allocate Invoice to Commitments
+
+```
+POST /api/books/invoice_documents/:id/allocate
+```
+
+**Scope:** `write`
+
+Approves allocations from an invoice to one or more commitments. This doesn't create a bill — it records which commitments this invoice satisfies.
+
+```json
+{
+  "allocations": [
+    { "commitment_id": 1, "allocated_cents": 109500 }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `allocations[].commitment_id` | integer | yes | Commitment to allocate to |
+| `allocations[].allocated_cents` | integer | yes | Amount to allocate (must be positive) |
+
+After allocation, the commitment's `matched_total_cents` and `remaining_cents` are recalculated, and the invoice document's `commitment_review_status` is set to `approved`.
+
+Returns `422` if:
+- No allocations provided
+- Commitment is not in a matchable status (`open` or `partially_matched`)
+
+### Create Bill from Allocation
+
+```
+POST /api/books/invoice_documents/:id/create_commitment_bill
+```
+
+**Scope:** `write`
+
+Creates a bill from an invoice's approved allocations. The invoice must have `commitment_review_status: "approved"` and not already be converted.
+
+Each allocation becomes a bill line. Optionally include non-PO lines for surcharges, fees, or other charges not covered by commitments.
+
+```json
+{
+  "non_po_lines": [
+    {
+      "description": "Fuel surcharge",
+      "amount_cents": 14500,
+      "account_id": 305
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `non_po_lines[].description` | string | yes | Line description |
+| `non_po_lines[].amount_cents` | integer | yes | Amount in cents |
+| `non_po_lines[].account_id` | integer | no | Expense account |
+
+The created bill:
+- Uses the contact from the first commitment
+- Sets issue/due dates from the invoice extraction
+- Attaches the invoice PDF
+- Links back to the allocations
+
+Returns `409 Conflict` if:
+- Allocations are not approved
+- Invoice is already converted to a bill
+
+---
+
+## Typical Integration Flow
+
+Here's the end-to-end flow for pushing orders and processing invoices:
+
+### 1. Set up vendor contact
+
+```
+POST /api/books/contacts/find_or_create
+{
+  "contact": {
+    "external_id": "vendor-acme",
+    "name": "Acme Materials",
+    "contact_type": "vendor"
+  }
+}
+```
+
+### 2. Push commitments as orders are created
+
+```
+PUT /api/books/commitments/by_external/quarry/ORD-8834
+{
+  "commitment": {
+    "contact_id": 42,
+    "number": "PO-2026-001",
+    "expected_total_cents": 109500,
+    "service_address": "123 Job Site Rd",
+    "period_start": "2026-03-01",
+    "period_end": "2026-03-31",
+    "commitment_lines_attributes": [
+      { "description": "Excavator rental", "quantity": 1, "unit_price_cents": 109500 }
+    ]
+  }
+}
+```
+
+### 3. Invoice arrives in inbox
+
+Upload the vendor invoice PDF:
+
+```
+POST /api/books/invoice_documents
+Content-Type: multipart/form-data
+
+file=@invoice.pdf
+```
+
+VisiBooks extracts vendor name, amounts, dates, and invoice number from the PDF.
+
+### 4. Match and approve (UI or API)
+
+In the VisiBooks inbox, the invoice review screen shows matching commitments automatically. The user approves the allocation and creates the bill.
+
+Or via API:
+
+```
+POST /api/books/invoice_documents/7/allocate
+{ "allocations": [{ "commitment_id": 1, "allocated_cents": 109500 }] }
+
+POST /api/books/invoice_documents/7/create_commitment_bill
+{ "non_po_lines": [] }
+```
+
+### 5. Post and pay the bill
+
+```
+POST /api/books/bills/12/post_bill
+
+POST /api/books/vendor_payments
+{ "vendor_payment": { "contact_id": 42, "amount_cents": 109500, "paid_at": "2026-03-15" } }
+
+POST /api/books/vendor_payments/1/apply
+{ "applications": [{ "bill_id": 12, "amount_cents": 109500 }] }
+```
