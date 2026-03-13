@@ -9,6 +9,8 @@ VisiBooks fires webhook events when resources are created or changed via the API
 
 ## Events
 
+### Receivables
+
 | Event | Trigger |
 |---|---|
 | `books.contact.created` | Contact created |
@@ -19,10 +21,98 @@ VisiBooks fires webhook events when resources are created or changed via the API
 | `books.payment.created` | Payment created |
 | `books.payment.applied` | Payment applied to invoice(s) |
 | `books.payment.voided` | Payment voided |
+
+### Payables
+
+| Event | Trigger |
+|---|---|
+| `books.bill.created` | Bill created (direct or from commitment) |
+| `books.bill.posted` | Bill posted to ledger |
+| `books.bill.voided` | Bill voided |
+| `books.bill.paid` | Bill fully paid via vendor payment |
+| `books.vendor_payment.created` | Vendor payment recorded |
+| `books.vendor_payment.applied` | Payment applied to bill(s) |
+| `books.vendor_payment.voided` | Vendor payment voided |
+| `books.commitment.matched` | Invoice allocated to a commitment |
+| `books.commitment.bill_created` | Bill created from commitment allocations |
+
+### System
+
+| Event | Trigger |
+|---|---|
 | `books.reconciliation.completed` | Reconciliation completed |
 | `books.reconciliation.invalidated` | Reconciliation invalidated |
 | `books.period.closed` | Accounting period closed |
 | `books.period.reopened` | Accounting period reopened |
+
+## Example Payloads
+
+### `books.commitment.matched`
+
+Fired when an invoice is allocated to a commitment. Includes the commitment's external IDs so your system can correlate.
+
+```json
+{
+  "event": "books.commitment.matched",
+  "event_id": "a1b2c3d4-...",
+  "occurred_at": "2026-03-12T15:30:00Z",
+  "data": {
+    "commitment_id": 1,
+    "commitment_number": "PO-2026-001",
+    "external_source": "quarry",
+    "external_id": "ORD-8834",
+    "invoice_document_id": 7,
+    "allocated_cents": 109500,
+    "remaining_cents": 0,
+    "status": "fully_matched"
+  }
+}
+```
+
+### `books.commitment.bill_created`
+
+Fired when a bill is created from approved commitment allocations.
+
+```json
+{
+  "event": "books.commitment.bill_created",
+  "event_id": "e5f6a7b8-...",
+  "occurred_at": "2026-03-12T15:35:00Z",
+  "data": {
+    "bill_id": 12,
+    "bill_total_cents": 124000,
+    "invoice_document_id": 7,
+    "commitment_ids": [1],
+    "commitments": [
+      {
+        "commitment_id": 1,
+        "number": "PO-2026-001",
+        "external_source": "quarry",
+        "external_id": "ORD-8834",
+        "status": "fully_matched"
+      }
+    ]
+  }
+}
+```
+
+### `books.bill.paid`
+
+Fired when a bill's balance reaches zero after a vendor payment is applied.
+
+```json
+{
+  "event": "books.bill.paid",
+  "event_id": "c9d0e1f2-...",
+  "occurred_at": "2026-03-15T10:00:00Z",
+  "data": {
+    "bill_id": 12,
+    "bill_number": "BILL-00042",
+    "total_cents": 124000,
+    "contact_id": 42
+  }
+}
+```
 
 ## Headers
 
