@@ -29,7 +29,7 @@ Statuses are **derived** from allocation totals, not set manually. The only exce
 ## List Commitments
 
 ```
-GET /api/books/commitments
+GET /api/v1/books/commitments
 ```
 
 **Scope:** `read`
@@ -79,7 +79,7 @@ GET /api/books/commitments
 ## Get Commitment
 
 ```
-GET /api/books/commitments/:id
+GET /api/v1/books/commitments/:id
 ```
 
 **Scope:** `read`
@@ -207,7 +207,7 @@ Returns the commitment with lines and allocations:
 ## Create Commitment
 
 ```
-POST /api/books/commitments
+POST /api/v1/books/commitments
 ```
 
 **Scope:** `write`
@@ -256,6 +256,7 @@ POST /api/books/commitments
 | `notes` | string | no | Notes |
 | `metadata` | object | no | Arbitrary key-value data |
 | `commitment_lines_attributes` | array | no | Line items (see Line Fields above) |
+| `replace_lines` | boolean | no | If `true`, deletes all existing line items before adding new ones. Only applies on update/upsert when `commitment_lines_attributes` is also provided. Ignored if commitment has approved allocations. |
 
 **Returns:** `201 Created`
 
@@ -264,7 +265,7 @@ POST /api/books/commitments
 ## Upsert by External ID
 
 ```
-PUT /api/books/commitments/by_external/:external_source/:external_id
+PUT /api/v1/books/commitments/by_external/:external_source/:external_id
 ```
 
 **Scope:** `write`
@@ -280,7 +281,7 @@ Same as [Create Commitment](#create-commitment).
 ### Example: Push a quarry order
 
 ```
-PUT /api/books/commitments/by_external/quarry/ORD-8834
+PUT /api/v1/books/commitments/by_external/quarry/ORD-8834
 ```
 
 ```json
@@ -316,6 +317,26 @@ When a commitment with the given `external_source` + `external_id` already exist
 - **Has approved allocations:** Only non-financial fields can be updated: `service_address`, `period_start`, `period_end`, `notes`, and `metadata`. Attempts to change financial fields return `409 Conflict`.
 - **Canceled:** Returns `409 Conflict`. Canceled commitments cannot be reactivated.
 
+### Replacing Line Items
+
+By default, passing `commitment_lines_attributes` on an existing commitment **appends** new lines. To fully replace all lines, set `replace_lines: true`:
+
+```json
+{
+  "commitment": {
+    "expected_total_cents": 91000,
+    "replace_lines": true,
+    "commitment_lines_attributes": [
+      { "description": "Monthly rental", "quantity": 1, "unit_price_cents": 48000 },
+      { "description": "Delivery", "quantity": 1, "unit_price_cents": 21500 },
+      { "description": "Removal", "quantity": 1, "unit_price_cents": 21500 }
+    ]
+  }
+}
+```
+
+This deletes all existing lines and creates the new ones in a single operation. Only works when the commitment has no approved allocations.
+
 **Returns:** `201 Created` (new) or `200 OK` (updated)
 
 ---
@@ -323,12 +344,12 @@ When a commitment with the given `external_source` + `external_id` already exist
 ## Update Commitment
 
 ```
-PATCH /api/books/commitments/:id
+PATCH /api/v1/books/commitments/:id
 ```
 
 **Scope:** `write`
 
-Same parameters as Create. Subject to the same financial field restrictions as upsert when allocations exist.
+Same parameters as Create, including `replace_lines`. Subject to the same financial field restrictions as upsert when allocations exist.
 
 Returns `409 Conflict` if:
 - Commitment is canceled
@@ -339,7 +360,7 @@ Returns `409 Conflict` if:
 ## Cancel Commitment
 
 ```
-POST /api/books/commitments/:id/cancel
+POST /api/v1/books/commitments/:id/cancel
 ```
 
 **Scope:** `write`
@@ -357,7 +378,7 @@ These endpoints live on the [Invoice Documents](#invoice-matching-flow) resource
 ### Get Commitment Candidates
 
 ```
-GET /api/books/invoice_documents/:id/commitment_candidates
+GET /api/v1/books/invoice_documents/:id/commitment_candidates
 ```
 
 **Scope:** `read`
@@ -399,7 +420,7 @@ Returns commitments that may match a given invoice, ranked by match quality. Mat
 ### Allocate Invoice to Commitments
 
 ```
-POST /api/books/invoice_documents/:id/allocate
+POST /api/v1/books/invoice_documents/:id/allocate
 ```
 
 **Scope:** `write`
@@ -428,7 +449,7 @@ Returns `422` if:
 ### Create Bill from Allocation
 
 ```
-POST /api/books/invoice_documents/:id/create_commitment_bill
+POST /api/v1/books/invoice_documents/:id/create_commitment_bill
 ```
 
 **Scope:** `write`
@@ -474,7 +495,7 @@ Here's the end-to-end flow for pushing orders and processing invoices:
 ### 1. Set up vendor contact
 
 ```
-POST /api/books/contacts/find_or_create
+POST /api/v1/books/contacts/find_or_create
 {
   "contact": {
     "external_id": "vendor-acme",
@@ -487,7 +508,7 @@ POST /api/books/contacts/find_or_create
 ### 2. Push commitments as orders are created
 
 ```
-PUT /api/books/commitments/by_external/quarry/ORD-8834
+PUT /api/v1/books/commitments/by_external/quarry/ORD-8834
 {
   "commitment": {
     "contact_id": 42,
@@ -508,7 +529,7 @@ PUT /api/books/commitments/by_external/quarry/ORD-8834
 Upload the vendor invoice PDF:
 
 ```
-POST /api/books/invoice_documents
+POST /api/v1/books/invoice_documents
 Content-Type: multipart/form-data
 
 file=@invoice.pdf
@@ -523,21 +544,21 @@ In the VisiBooks inbox, the invoice review screen shows matching commitments aut
 Or via API:
 
 ```
-POST /api/books/invoice_documents/7/allocate
+POST /api/v1/books/invoice_documents/7/allocate
 { "allocations": [{ "commitment_id": 1, "allocated_cents": 109500 }] }
 
-POST /api/books/invoice_documents/7/create_commitment_bill
+POST /api/v1/books/invoice_documents/7/create_commitment_bill
 { "non_po_lines": [] }
 ```
 
 ### 5. Post and pay the bill
 
 ```
-POST /api/books/bills/12/post_bill
+POST /api/v1/books/bills/12/post_bill
 
-POST /api/books/vendor_payments
+POST /api/v1/books/vendor_payments
 { "vendor_payment": { "contact_id": 42, "amount_cents": 109500, "paid_at": "2026-03-15" } }
 
-POST /api/books/vendor_payments/1/apply
+POST /api/v1/books/vendor_payments/1/apply
 { "applications": [{ "bill_id": 12, "amount_cents": 109500 }] }
 ```
